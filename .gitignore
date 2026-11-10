@@ -1,0 +1,14 @@
+# Large data files
+data/raw/
+data/interim/
+*.csv
+*.xpt
+*.xz
+
+# Python / Jupyter
+__pycache__/
+.ipynb_checkpoints/
+*.joblib
+*.pkl
+.env
+venv/
