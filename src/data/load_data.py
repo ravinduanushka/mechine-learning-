@@ -2,11 +2,11 @@ import os
 import requests
 import pandas as pd
 import pyreadstat
-from typing import Generator, List
+from typing import Generator, List, Dict
 
 NHANES_CDN_URL = "https://wwwn.cdc.gov/Nchs/Data/Nhanes/Public"
 
-NHANES_FILES = {
+NHANES_FILES: Dict[str, Dict[str, str]] = {
     "2011-2012": {
         "DEMO": "DEMO_G.XPT",
         "BMX": "BMX_G.XPT",
@@ -37,8 +37,7 @@ def download_nhanes_file(cycle_label: str, filename: str, output_dir: str = "dat
     os.makedirs(output_dir, exist_ok=True)
     destination_path = os.path.join(output_dir, filename)
 
-    # Use local file if it already exists and is non-empty
-    if os.path.exists(destination_path) and os.path.getsize(destination_path) > 1024:
+    if os.path.exists(destination_path) and os.path.getsize(destination_path) > 5000:
         return destination_path
 
     year_cycle = cycle_label.split("-")[0]
