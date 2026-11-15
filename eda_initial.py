@@ -128,6 +128,54 @@ def describe_numeric(df: pd.DataFrame, numerical: list[str]) -> pd.DataFrame:
   return d
 
 
+def outlier_report(df: pd.DataFrame, numerical: list[str], iqr_k: float = 1.5,
+                   z_thresh: float = 3.0, flag_pct: float = 5.0) -> pd.DataFrame:
+  """Outliers per numerical column by the IQR rule and by z-score.
+
+  - IQR outlier : value outside [Q1 - k*IQR, Q3 + k*IQR]  (k = ``iqr_k``, default 1.5)
+  - far outlier : same rule with 2*k (default 3.0) - very extreme values
+  - z outlier   : |z| > ``z_thresh``
+  A column is flagged when more than ``flag_pct`` % of its values are IQR outliers.
+  Outliers are only REPORTED here; nothing is removed or changed.
+  """
+  if iqr_k <= 0 or z_thresh <= 0:
+    raise ValueError("iqr_k and z_thresh must be positive")
+  rows = []
+  for c in numerical:
+    s = df[c].dropna()
+    if s.empty:
+      continue
+    q1, q3 = s.quantile([0.25, 0.75])
+    iqr = q3 - q1
+    lo, hi = q1 - iqr_k * iqr, q3 + iqr_k * iqr
+    far_lo, far_hi = q1 - 2 * iqr_k * iqr, q3 + 2 * iqr_k * iqr
+    std = s.std()
+    n_iqr = int(((s < lo) | (s > hi)).sum())
+    rows.append({
+        "column": c,
+        "n_iqr_outliers": n_iqr,
+        "iqr_outlier_%": round(n_iqr / len(s) * 100, 2),
+        "n_far_outliers": int(((s < far_lo) | (s > far_hi)).sum()),
+        "n_z_outliers": int((((s - s.mean()) / std).abs() > z_thresh).sum()) if std > 0 else 0,
+        "lower_fence": round(lo, 3),
+        "upper_fence": round(hi, 3),
+        "min": round(s.min(), 3),
+        "max": round(s.max(), 3),
+    })
+  out = pd.DataFrame(rows)
+  if out.empty:
+    print("Outliers: no numerical columns to check\n")
+    return out
+  out["flag"] = np.where(out["iqr_outlier_%"] > flag_pct, "CHECK", "")
+  out = out.set_index("column")
+  print(f"Outlier report (IQR k={iqr_k}, z>{z_thresh}); reported only, nothing removed:")
+  print(out.to_string())
+  flagged = out.index[out["flag"] == "CHECK"].tolist()
+  print("Columns with more than", f"{flag_pct}% IQR outliers:", flagged or "none",
+        "\n  (heavy right skew often explains these; consider a log transform or robust scaling.)\n")
+  return out
+
+
 # ---------------------------------------------------------------- 5. target ----
 def detect_target(df: pd.DataFrame, target: str | None = None) -> str | None:
   """Use the given target, else the first well-known target name or *_target column."""
@@ -167,8 +215,9 @@ def visualization_plan(target: str | None, numerical: list[str], categorical: li
     print(f"  1. Target balance bar chart ({target})")
     print(f"  2. Target rate by each categorical column ({len(categorical)} columns)")
     print(f"  3. Numeric distributions split by target ({len(numerical)} columns)")
-  print("  4. Correlation heatmap of numerical columns (look for |r| > 0.9 pairs)")
-  print("  5. Missing-value bar chart (only if anything is missing)")
+  print("  4. Boxplots of numerical columns (outliers, split by target)")
+  print("  5. Correlation heatmap of numerical columns (look for |r| > 0.9 pairs)")
+  print("  6. Missing-value bar chart (only if anything is missing)")
   print("  Next steps: check outliers, decide imputation, confirm no target-defining columns are features\n")
 
 
@@ -209,6 +258,25 @@ def plot_numeric(df, numerical, target=None, save_dir=None, show=True, max_cols=
   for ax in axes.ravel()[len(cols):]:
     ax.axis("off")
   _finish(fig, "numeric_distributions", save_dir, show)
+
+
+def plot_boxplots(df, numerical, target=None, save_dir=None, show=True, max_cols=12):
+  """One boxplot per numerical column (split by target when given) to see outliers."""
+  cols = numerical[:max_cols]
+  if not cols:
+    return
+  ncols = 3
+  nrows = int(np.ceil(len(cols) / ncols))
+  fig, axes = plt.subplots(nrows, ncols, figsize=(4.2 * ncols, 3 * nrows), squeeze=False)
+  for ax, c in zip(axes.ravel(), cols):
+    if target:
+      sns.boxplot(data=df, x=target, y=c, ax=ax, color="#4C78A8", fliersize=2)
+    else:
+      sns.boxplot(data=df, y=c, ax=ax, color="#4C78A8", fliersize=2)
+    ax.set_title(c, fontsize=10)
+  for ax in axes.ravel()[len(cols):]:
+    ax.axis("off")
+  _finish(fig, "boxplots", save_dir, show)
 
 
 def plot_categorical(df, categorical, target=None, save_dir=None, show=True, max_cols=9):
@@ -256,8 +324,11 @@ def plot_missing(report, save_dir=None, show=True):
 
 # --------------------------------------------------------------- 7. run all ----
 def run_eda(path: str | Path | None = None, target: str | None = None,
-            save: bool = False, show: bool = True):
-  """Run the whole EDA. Returns (DataFrame, dict with the computed summaries)."""
+            save: bool = False, show: bool = True, iqr_k: float = 1.5):
+  """Run the whole EDA. Returns (DataFrame, dict with the computed summaries).
+
+  ``iqr_k`` sets the IQR multiplier for outlier detection (1.5 standard, 3.0 strict).
+  """
   path = Path(path) if path else pick_file(locate_data_dir())
   print(f"Loading: {path}\n")
   df = load_dataset(path)
@@ -271,6 +342,7 @@ def run_eda(path: str | Path | None = None, target: str | None = None,
   target = detect_target(df, target)
   numerical, categorical, ids = split_columns(df, target)
   stats = describe_numeric(df, numerical)
+  outliers = outlier_report(df, numerical, iqr_k=iqr_k)
 
   summary = None
   if target:
@@ -282,19 +354,23 @@ def run_eda(path: str | Path | None = None, target: str | None = None,
   if target:
     plot_target(df, target, save_dir, show)
   plot_numeric(df, numerical, target, save_dir, show)
+  plot_boxplots(df, numerical, target, save_dir, show)
   plot_categorical(df, categorical, target, save_dir, show)
   plot_correlation(df, numerical, save_dir, show)
   plot_missing(report, save_dir, show)
 
   return df, {"quality": report, "numerical": numerical, "categorical": categorical,
-              "ids": ids, "stats": stats, "target": target, "target_summary": summary}
+              "ids": ids, "stats": stats, "outliers": outliers, "target": target,
+              "target_summary": summary}
 
 
 if __name__ == "__main__":
   ap = argparse.ArgumentParser(description="Initial EDA for cardiometabolic risk data")
   ap.add_argument("--file", help="parquet/csv/feather file (default: auto-detect under data/)")
   ap.add_argument("--target", help="target column (default: auto-detect)")
+  ap.add_argument("--iqr-k", type=float, default=1.5,
+                  help="IQR multiplier for outliers (1.5 standard, 3.0 strict)")
   ap.add_argument("--save", action="store_true", help="save figures to reports/figures/")
   ap.add_argument("--no-show", action="store_true", help="do not open plot windows")
   a = ap.parse_args()
-  run_eda(a.file, a.target, save=a.save, show=not a.no_show)
+  run_eda(a.file, a.target, save=a.save, show=not a.no_show, iqr_k=a.iqr_k)
