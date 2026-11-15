@@ -1,0 +1,7 @@
+feature_set,rank,feature
+Set 0,0,age
+Set 0,1,race_4
+Set 0,2,smoking_current
+Set 0,3,race_3
+Set 0,4,smoking_never
+Set 0,5,race_1
