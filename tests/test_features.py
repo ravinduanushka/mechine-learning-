@@ -74,6 +74,36 @@ def test_step_features_pending_not_invented(minutes):
   assert not any(k.startswith("peak_1min") for k in bf.pending_step_features(with_steps))
 
 
+def _mims_frame(rows):
+  return pd.DataFrame(rows, index=range(len(rows)),
+                      columns=pd.MultiIndex.from_product([["mims"], range(1440)]))
+
+
+def test_extended_features_known_values():
+  flat = np.full(1440, 5.0)                       # even, always sedentary
+  v = np.zeros(1440)
+  v[100:160] = 30.0                               # one 60-min high-intensity bout
+  out = bf.engineer_extended_mims_features(_mims_frame([flat, v]))
+  assert out.loc[0, "activity_entropy"] == pytest.approx(1.0, abs=1e-3)
+  assert out.loc[1, "activity_entropy"] < 0.7     # concentrated in one hour
+  assert out.loc[1, "min_high_intensity"] == 60
+  assert out.loc[1, "longest_active_bout"] == 60
+  assert out.loc[1, "longest_sedentary_bout"] == 1440 - 160
+  assert out.loc[0, "longest_active_bout"] == 0 and out.loc[0, "longest_sedentary_bout"] == 1440
+  assert out.loc[1, "mims_q1"] == pytest.approx(30.0 * 60 / 360)
+  assert out.loc[1, ["mims_q2", "mims_q3", "mims_q4"]].eq(0).all()
+  assert out.loc[0, "mims_median"] == 5.0 and out.loc[0, "mims_p90"] == 5.0
+
+
+def test_extended_features_in_set_b_and_skipped_without_mims(cohort, minutes):
+  static = bf.build_static_features(cohort, minutes)
+  assert {"mims_q1", "activity_entropy", "longest_active_bout"} <= set(static["extended"].columns)
+  unsup = bf.engineer_unsupervised_features(minutes, fit_index=minutes.index[:90])
+  assert set(static["extended"].columns) <= set(bf.assemble_feature_sets(static, unsup)["setB"].columns)
+  no_mims = minutes.drop(columns="mims", level=0)
+  assert bf.engineer_extended_mims_features(no_mims).shape[1] == 0
+
+
 def test_pca_and_kmeans_shapes(minutes):
   fit_ids = minutes.index[:90]
   u = bf.engineer_unsupervised_features(minutes, fit_index=fit_ids)

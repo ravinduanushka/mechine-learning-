@@ -27,6 +27,8 @@ from sklearn.decomposition import PCA
 EPS = 1e-5
 # MIMS/min below this counts as sedentary. ASSUMPTION: confirm against the proposal.
 SEDENTARY_MIMS = 10.5
+# MIMS/min at or above this counts as high intensity. ASSUMPTION: confirm against the proposal.
+HIGH_MIMS = 20.0
 
 
 def _signals(df: pd.DataFrame, prefix: str) -> list[str]:
@@ -177,6 +179,44 @@ def engineer_unsupervised_features(
   return out
 
 
+def engineer_extended_mims_features(df_minutes: pd.DataFrame) -> pd.DataFrame:
+  """Extra MIMS-only features (work without step data).
+
+  - mims_q1..q4: mean MIMS in each quarter of the 1440-minute day (the loader
+    uses row order within a day, so clock labels are NOT assumed)
+  - mims_median, mims_p90: distribution of minute-level MIMS
+  - min_high_intensity: minutes with MIMS >= HIGH_MIMS
+  - longest_active_bout / longest_sedentary_bout: longest run (minutes) at/above
+    or below SEDENTARY_MIMS
+  - activity_entropy: normalised Shannon entropy of how activity is spread over
+    the day (1 = perfectly even, 0 = all activity in one minute)
+  """
+  out = pd.DataFrame(index=df_minutes.index)
+  if "mims" not in df_minutes.columns.get_level_values(0):
+    return out
+  mims = df_minutes["mims"].to_numpy(dtype=float)
+  n_min = mims.shape[1]
+  usable = (n_min // 4) * 4
+  quarters = mims[:, :usable].reshape(len(mims), 4, -1).mean(axis=2)
+  for k in range(4):
+    out[f"mims_q{k + 1}"] = quarters[:, k]
+  out["mims_median"] = np.median(mims, axis=1)
+  out["mims_p90"] = np.percentile(mims, 90, axis=1)
+  out["min_high_intensity"] = (mims >= HIGH_MIMS).sum(axis=1)
+
+  active = mims >= SEDENTARY_MIMS
+  out["longest_active_bout"] = [
+      int(_run_lengths(r).max()) if r.any() else 0 for r in active]
+  out["longest_sedentary_bout"] = [
+      int(_run_lengths(~r).max()) if (~r).any() else 0 for r in active]
+
+  total = mims.sum(axis=1, keepdims=True)
+  p = np.divide(mims, total, out=np.zeros_like(mims), where=total > 0)
+  plogp = np.where(p > 0, p * np.log(np.where(p > 0, p, 1.0)), 0.0)
+  out["activity_entropy"] = -plogp.sum(axis=1) / np.log(n_min)
+  return out
+
+
 # ------------------------------------------------------------------------
 # Member 2 additions: Set 0, pending-feature reporting, feature-set assembly
 # ------------------------------------------------------------------------
@@ -234,7 +274,7 @@ def build_static_features(cohort: pd.DataFrame, minutes: pd.DataFrame) -> dict:
   """Deterministic (non-learned) feature blocks, aligned on SEQN.
 
   Returns dict with: set0, summaries (Set A extras), intensity, sedentary,
-  patterns. Nothing here is fitted, so it is safe to compute on all rows.
+  patterns, extended. Nothing here is fitted, so it is safe to compute on all rows.
   """
   idx = cohort.index.intersection(minutes.index)
   cohort, minutes = cohort.loc[idx], minutes.loc[idx]
@@ -244,6 +284,7 @@ def build_static_features(cohort: pd.DataFrame, minutes: pd.DataFrame) -> dict:
       "intensity": engineer_intensity_features(minutes),
       "sedentary": engineer_sedentary_features(minutes),
       "patterns": engineer_activity_patterns(minutes),
+      "extended": engineer_extended_mims_features(minutes),
   }
 
 
@@ -254,7 +295,8 @@ def assemble_feature_sets(static: dict, unsup: pd.DataFrame) -> dict:
   unsup = pd.get_dummies(unsup, columns=["activity_phenotype_cluster"],
                          prefix="phenotype", drop_first=True, dtype=int)
   engineered = pd.concat(
-      [static["intensity"], static["sedentary"], static["patterns"], unsup], axis=1
+      [static["intensity"], static["sedentary"], static["patterns"],
+       static["extended"], unsup], axis=1
   )
   return {"set0": set0, "setA": set_a, "setB": set_a.join(engineered)}
 
