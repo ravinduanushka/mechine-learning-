@@ -6,6 +6,8 @@ Three building blocks:
                             fixed 80/20 stratified `split` column (M3-01)
   2. build_pipeline()    -> Impute -> Scale -> Classifier
   3. tune_model()        -> GridSearchCV inside stratified 5-fold CV (M3-06)
+  4. oof_probabilities() / best_f1_threshold()
+                         -> decision threshold chosen on training data only
 
 Leakage rules followed here:
   - The test rows are separated FIRST and are never passed to tune_model().
@@ -17,10 +19,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 from sklearn.base import clone
 from sklearn.impute import SimpleImputer
-from sklearn.model_selection import GridSearchCV, StratifiedKFold
+from sklearn.metrics import precision_recall_curve
+from sklearn.model_selection import GridSearchCV, StratifiedKFold, cross_val_predict
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
@@ -101,3 +105,26 @@ def tune_model(model_name: str, X_train, y_train, n_splits: int = 5,
         n_jobs=n_jobs,
     )
     return search.fit(X_train, y_train)
+
+
+# ---------------------------------------------------------------------------
+# 4. Out-of-fold probabilities and decision threshold (proposal section 4.8)
+# ---------------------------------------------------------------------------
+def oof_probabilities(search: GridSearchCV, X_train, y_train,
+                      n_splits: int = 5) -> np.ndarray:
+    """Out-of-fold P(risk = 1) for every TRAINING participant.
+
+    The tuned pipeline is refitted in 5 folds; each person gets a probability
+    from a model that never saw them. Used only to choose the threshold, so
+    the test set stays untouched.
+    """
+    cv = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=RANDOM_STATE)
+    return cross_val_predict(search.best_estimator_, X_train, y_train, cv=cv,
+                             method="predict_proba", n_jobs=-1)[:, 1]
+
+
+def best_f1_threshold(y_true, proba) -> float:
+    """Threshold tau that maximises F1 on the given (out-of-fold) probabilities."""
+    precision, recall, thresholds = precision_recall_curve(y_true, proba)
+    f1 = 2 * precision * recall / np.clip(precision + recall, 1e-12, None)
+    return float(thresholds[np.argmax(f1[:-1])])  # last point has no threshold
