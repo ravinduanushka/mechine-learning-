@@ -84,6 +84,8 @@ All diagnostic figures generated in `notebooks/02_eda.ipynb` are saved at `300 D
 - **`m1_08_eda_distributions.png`:** Three-panel exploratory summary showing target class balance (`2,618` vs `1,985`), age-stratified MetS prevalence with KDE curves, and sex-stratified risk counts.
 - **`m1_08_attrition_flow_diagram.png`:** Complete cohort attrition diagram from `n = 19,931` raw records to the final `n = 4,603` leakage-free analytical dataset.
 
+Model evaluation figures from `notebooks/06_evaluation_insights.ipynb` (Member 4) are listed in [Section 6](#6-model-evaluation-explainability--sensitivity-member-4--kasuntha-smm).
+
 ---
 
 ## 5. Repository Structure & Pipeline Roadmap
@@ -104,17 +106,107 @@ mechine-learning-/
 ├── notebooks/
 │   ├── 01_data_preprocessing.ipynb      # [Completed] Ingestion, filtering, target creation
 │   ├── 02_eda.ipynb                     # [Completed] QC, outlier inspection, attrition diagram
-│   ├── 03_feature_engineering.ipynb     # [Next] Behavioral, circadian & intensity features
-│   ├── 04_feature_selection.ipynb       # [Planned] Feature selection & dimensionality reduction
-│   ├── 05_model_training.ipynb          # [Planned] Model training & cross-validation
-│   └── 06_evaluation_insights.ipynb     # [Planned] ROC-AUC, SHAP explainability & clinical insights
+│   ├── 03_feature_engineering.ipynb     # [Completed] Behavioral, circadian & intensity features, PCA, K-means
+│   ├── 04_feature_selection.ipynb       # [In progress] Feature selection notebook (logic in src/features/selectors.py)
+│   ├── 05_model_training.ipynb          # [Completed - progress scope] LR, RF, GB x Sets 0/A/B, 5-fold CV
+│   └── 06_evaluation_insights.ipynb     # [Completed] Test metrics, bootstrap CIs, DeLong, importance, E4-E6
+├── models/
+│   └── tuned_pipelines.joblib           # Git-ignored; rebuilt and verified by notebook 06 if missing
 ├── reports/
-│   └── figures/                         # Saved high-resolution diagnostic plots (300 DPI)
+│   ├── figures/                         # Saved high-resolution diagnostic plots (300 DPI)
+│   └── tables/                          # Evaluation tables (CSV), committed as deliverables
 ├── src/
-│   └── data/
-│       ├── build_cohort.py              # NHANES clinical ingestion & MetS target logic
-│       ├── wearable_processor.py        # Wear-time validation & minute-stream chunked filtering
-│       └── prepare_handover.py          # Leakage-free handover verification script
+│   ├── data/                            # Member 1: cohort, wear-time filters, labels
+│   ├── features/                        # Member 2: feature sets, PCA / K-means, selectors
+│   ├── models/                          # Member 3: classifiers + leakage-safe pipeline
+│   └── evaluation/                      # Member 4: metrics, bootstrap, explainability, sensitivity, plots
+├── tests/                               # pytest suite (incl. tests/test_evaluation.py)
 ├── .gitignore
 ├── requirements.txt
 └── README.md
+```
+
+---
+
+## 6. Model Evaluation, Explainability & Sensitivity (Member 4 – Kasuntha S.M.M.)
+
+All evaluation tasks (`M4-01` – `M4-07`) are implemented in `src/evaluation/` and run end-to-end in `notebooks/06_evaluation_insights.ipynb`.
+The held-out test set (`n = 918`, prevalence `0.43`) is only **scored** here; every threshold and hyperparameter was fixed on training data.
+
+### Task Completion Matrix
+
+| Task ID | Task Description | Code | Deliverable |
+| :--- | :--- | :--- | :--- |
+| **M4-01** | Accuracy, precision, recall, F1, balanced accuracy | `src/evaluation/metrics.py` | `reports/tables/model_performance_metrics.csv` |
+| **M4-02** | ROC-AUC, PR-AUC, Brier score + DeLong test for correlated AUCs | `src/evaluation/metrics.py` | same table, `reports/tables/statistical_tests.csv` |
+| **M4-03** | ROC / PR curves, confusion matrices (τ = 0.5 and F1-optimal), calibration | `src/evaluation/plots.py` | `reports/figures/m4_03_*.png` |
+| **M4-04** | 95% percentile CIs from 1,000 bootstrap resamples; paired Set 0 → A → B differences | `src/evaluation/bootstrap.py` | `model_performance_summary.csv`, `m4_04_*_forest_plot.png` |
+| **M4-05** | LR odds ratios, RF Gini, permutation importance (R = 20), selection stability across folds | `src/evaluation/explainability.py` | `feature_importance_*.csv`, `feature_selection_stability.csv`, `m4_05_*.png` |
+| **M4-06** | E4: refit with fasting survey weights `WTSAF2YR / 2` | `src/evaluation/sensitivity.py` | `reports/tables/sensitivity_analysis_results.csv` |
+| **M4-07** | E5: cross-cycle transfer (2011–12 ⇄ 2013–14); E6: feature-group ablation | `src/evaluation/sensitivity.py` | same table, `m4_07_sensitivity_analyses.png` |
+| **M4-08** | Integration: notebook 06, README, findings | `notebooks/06_evaluation_insights.ipynb` | Section 9 of notebook 06 |
+
+### Headline Results (test set, Feature Set B, F1-optimal threshold, 95% bootstrap CI)
+
+| Model | ROC-AUC | PR-AUC | Recall | Precision | F1 | Brier |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **Logistic Regression** | **0.761** [0.730, 0.793] | 0.645 | **0.843** | 0.582 | **0.689** | 0.201 |
+| Gradient Boosting | 0.754 [0.725, 0.787] | **0.665** | 0.810 | **0.585** | 0.679 | **0.199** |
+| Random Forest | 0.744 [0.715, 0.780] | 0.650 | 0.825 | 0.565 | 0.671 | 0.206 |
+| Majority-class baseline | 0.500 | 0.429 | 0.000 | – | 0.000 | – |
+
+**Value of wearable data (RQ2), test ROC-AUC:**
+
+| Model | Set 0 (demographics) | Set A (+ basic activity) | Set B (+ engineered) | Set 0 → A (DeLong p) |
+| :--- | :--- | :--- | :--- | :--- |
+| Logistic Regression | 0.732 | 0.751 | 0.761 | +0.019 (p < 0.001) |
+| Random Forest | 0.726 | 0.743 | 0.744 | +0.017 (p = 0.045) |
+| Gradient Boosting | 0.733 | 0.751 | 0.754 | +0.018 (p = 0.008) |
+
+### Key Findings
+1. **Moderate, genuine discrimination** (ROC-AUC 0.74–0.76) from demographics and wrist activity alone, without waist, blood pressure or lab values.
+2. **Wearable activity data adds significant value** over demographics for every model (+0.017 to +0.019 ROC-AUC).
+3. **Engineered features help the linear model only** (Set A → B: +0.010, p = 0.013 for LR; not significant for RF / GB).
+4. **Logistic Regression is the best model**: significantly better than Random Forest (DeLong p = 0.012), level with Gradient Boosting (p = 0.23).
+5. **Most robust activity predictors:** mean daily MIMS (OR 0.33 per SD), minutes of high-intensity activity, upper MIMS percentiles, day-to-day variability and 24-h profile PCA scores. Age is the strongest predictor overall.
+6. **Robustness:** survey weighting (E4) changes ROC-AUC by < 0.01; models transfer across NHANES cycles (E5, ROC-AUC 0.736–0.768); dropping any single engineered feature group changes CV ROC-AUC by ≤ 0.004 (E6), so activity information is redundant across groups.
+
+### Methodological Notes
+- **Fitted pipelines.** `models/tuned_pipelines.joblib` is git-ignored. Notebook 06 loads it if present; otherwise it rebuilds all 9 pipelines from `cv_results_summary.parquet`. In both cases it **asserts** that they reproduce Member 3's test predictions exactly before continuing.
+- **E4 survey weights.** 418 participants (9.1%) have `WTSAF2YR = 0` (outside the official fasting subsample). Following NHANES guidelines, they get weight 0 in the weighted analysis only.
+- **E6 adaptation.** The proposal planned "single step algorithm vs. all five". The cohort uses NHANES `PAXMIN` (MIMS only), so no step-count columns exist; E6 was run as a feature-group ablation on training-set CV instead.
+- **Scope at progress evaluation.** 3 of the 8 planned classifiers (LR, RF, GB) are trained. The evaluation code handles any number of models, so adding the remaining classifiers to `test_predictions.parquet` and re-running notebook 06 updates every table and figure.
+
+### Evaluation Figures (`reports/figures/`, 300 DPI)
+| Figure | Shows |
+| :--- | :--- |
+| `m4_03_roc_pr_curves_by_feature_set.png` | ROC and PR curves for every model, Set 0 vs A vs B |
+| `m4_03_roc_pr_curves_set_b.png` | ROC and PR curves of all models on Set B |
+| `m4_03_confusion_matrices_set_b.png` | Confusion matrices at τ = 0.5 and the F1-optimal τ |
+| `m4_03_calibration_set_b.png` | Reliability curves with Brier scores |
+| `m4_04_roc_auc_forest_plot.png` / `m4_04_pr_auc_forest_plot.png` | Test ROC-AUC / PR-AUC with 95% bootstrap CIs |
+| `m4_05_feature_importance.png` | LR odds ratios, RF Gini importance, permutation importance |
+| `m4_05_selection_stability.png` | Selection frequency across 5 folds (filter vs L1) |
+| `m4_07_sensitivity_analyses.png` | E4 survey weights, E5 cross-cycle transfer, E6 ablation |
+
+---
+
+## 7. How to Reproduce
+
+```bash
+# 1. Create and activate a virtual environment (Python 3.11+)
+python -m venv venv
+venv\Scripts\activate            # Windows
+# source venv/bin/activate       # macOS / Linux
+
+# 2. Install dependencies
+pip install -r requirements.txt
+
+# 3. Run the test suite
+python -m pytest tests -q
+
+# 4. Run the evaluation notebook end to end (about 15 minutes)
+jupyter nbconvert --to notebook --execute --inplace notebooks/06_evaluation_insights.ipynb
+```
+
+Notebooks `01`–`05` regenerate the upstream data files in `data/processed/`; notebook `06` only needs the processed files already in the repository.

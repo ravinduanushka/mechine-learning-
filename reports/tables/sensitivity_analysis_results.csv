@@ -1,0 +1,37 @@
+experiment,model,setting,roc_auc,pr_auc,brier,delta_auc,n_train,n_test,cv_std
+E4 survey weights,Logistic Regression,unweighted training / unweighted test,0.7609369550897043,0.6450153091344142,0.20142783220626773,,3657.0,918.0,
+E4 survey weights,Logistic Regression,unweighted training / survey-weighted test,0.7556466401217046,0.6608452793739993,0.20166241123676737,,3657.0,831.0,
+E4 survey weights,Logistic Regression,survey-weighted training / unweighted test,0.756698763901267,0.6469063439553334,0.20595408131486242,,3326.0,918.0,
+E4 survey weights,Logistic Regression,survey-weighted training / survey-weighted test,0.7531583409077849,0.6637379369017767,0.20367975217261386,,3326.0,831.0,
+E4 survey weights,Random Forest,unweighted training / unweighted test,0.7444104312783353,0.6502285185894034,0.2063985237492473,,3657.0,918.0,
+E4 survey weights,Random Forest,unweighted training / survey-weighted test,0.7358250394473701,0.6568670456062682,0.20799902163848819,,3657.0,831.0,
+E4 survey weights,Random Forest,survey-weighted training / unweighted test,0.7378666640833882,0.6389075305060106,0.2104462264304291,,3326.0,918.0,
+E4 survey weights,Random Forest,survey-weighted training / survey-weighted test,0.724306270795801,0.6451102663511266,0.21275806268947625,,3326.0,831.0,
+E4 survey weights,Gradient Boosting,unweighted training / unweighted test,0.7541728019529585,0.6647331921124244,0.19891495626645203,,3657.0,918.0,
+E4 survey weights,Gradient Boosting,unweighted training / survey-weighted test,0.7425188466901748,0.6738307837975644,0.2022075393245539,,3657.0,831.0,
+E4 survey weights,Gradient Boosting,survey-weighted training / unweighted test,0.7477234858759252,0.6603516483399545,0.20096918534454047,,3326.0,918.0,
+E4 survey weights,Gradient Boosting,survey-weighted training / survey-weighted test,0.7369137330236898,0.6636218386145297,0.2041836177076622,,3326.0,831.0,
+E5 cross-cycle,Logistic Regression,2011-12 -> 2013-14,0.7359582634700568,0.6433977981061407,0.20968749734894068,,2294.0,2281.0,
+E5 cross-cycle,Logistic Regression,2013-14 -> 2011-12,0.7675510373527697,0.6670980434658866,0.19614055121119234,,2281.0,2294.0,
+E5 cross-cycle,Random Forest,2011-12 -> 2013-14,0.7384397132060362,0.6575296007505242,0.2073962352684979,,2294.0,2281.0,
+E5 cross-cycle,Random Forest,2013-14 -> 2011-12,0.7551743483615048,0.6696828676793326,0.1997927135815644,,2281.0,2294.0,
+E5 cross-cycle,Gradient Boosting,2011-12 -> 2013-14,0.7431762087389574,0.6612174351698046,0.2026177616630622,,2294.0,2281.0,
+E5 cross-cycle,Gradient Boosting,2013-14 -> 2011-12,0.7654702792631098,0.680229762618966,0.19397106216240856,,2281.0,2294.0,
+E6 feature-group ablation (train CV),Logistic Regression,removed: (none: full Set B),0.7599423075489029,,,0.0,,,0.009876136642053512
+E6 feature-group ablation (train CV),Logistic Regression,removed: Basic activity,0.7605078259716735,,,0.0005655184227706389,,,0.010173589374467929
+E6 feature-group ablation (train CV),Logistic Regression,removed: Intensity distribution,0.7593055545481234,,,-0.0006367530007794775,,,0.010320378943556181
+E6 feature-group ablation (train CV),Logistic Regression,removed: Sedentary behaviour,0.7592044034700537,,,-0.0007379040788492164,,,0.010493796599395217
+E6 feature-group ablation (train CV),Logistic Regression,removed: Rhythm & variability,0.7596821829058283,,,-0.0002601246430745663,,,0.009741485405834046
+E6 feature-group ablation (train CV),Logistic Regression,removed: Unsupervised (PCA + k-means),0.7572926929097152,,,-0.0026496146391876696,,,0.010666784254898398
+E6 feature-group ablation (train CV),Random Forest,removed: (none: full Set B),0.7548060650440279,,,0.0,,,0.011953523037292883
+E6 feature-group ablation (train CV),Random Forest,removed: Basic activity,0.7536245789424765,,,-0.0011814861015514433,,,0.01155232667539039
+E6 feature-group ablation (train CV),Random Forest,removed: Intensity distribution,0.757897970865459,,,0.00309190582143104,,,0.012709710632260996
+E6 feature-group ablation (train CV),Random Forest,removed: Sedentary behaviour,0.7553945614608675,,,0.0005884964168395568,,,0.011642307402472123
+E6 feature-group ablation (train CV),Random Forest,removed: Rhythm & variability,0.7508759994672001,,,-0.003930065576827846,,,0.01153132844421392
+E6 feature-group ablation (train CV),Random Forest,removed: Unsupervised (PCA + k-means),0.7566454026229659,,,0.0018393375789379496,,,0.011133017123324278
+E6 feature-group ablation (train CV),Gradient Boosting,removed: (none: full Set B),0.7628742878167069,,,0.0,,,0.01071946109529187
+E6 feature-group ablation (train CV),Gradient Boosting,removed: Basic activity,0.7633391663535197,,,0.00046487853681287383,,,0.010658975794911915
+E6 feature-group ablation (train CV),Gradient Boosting,removed: Intensity distribution,0.762847959630381,,,-2.6328186325863534e-05,,,0.010327999890783134
+E6 feature-group ablation (train CV),Gradient Boosting,removed: Sedentary behaviour,0.7635683095765737,,,0.0006940217598668807,,,0.011386190509193267
+E6 feature-group ablation (train CV),Gradient Boosting,removed: Rhythm & variability,0.7586814721427059,,,-0.0041928156740009825,,,0.011105255049859236
+E6 feature-group ablation (train CV),Gradient Boosting,removed: Unsupervised (PCA + k-means),0.761967691387542,,,-0.0009065964291649076,,,0.010692050986488786
