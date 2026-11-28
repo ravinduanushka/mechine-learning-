@@ -9,7 +9,7 @@ import pandas as pd
 from sklearn.inspection import permutation_importance
 from sklearn.model_selection import StratifiedKFold
 
-from src.features.selectors import correlation_filter, l1_selection, mutual_information_ranking
+from src.features.selectors import select_by_method
 from src.models.classifiers import RANDOM_STATE, get_models
 from src.models.pipeline import PROCESSED_DIR, build_pipeline
 
@@ -103,26 +103,34 @@ def rank_table(**importances: pd.Series) -> pd.DataFrame:
 
 
 # --- Selection stability -----------------------------------------------------
+# output column -> selectors.select_by_method name
+STABILITY_METHODS = {
+    "filter_mi": "filter",          # correlation filter, then top-k mutual information
+    "wrapper_rfecv_lr": "wrapper_lr",  # correlation filter, then RFECV with logistic regression
+    "wrapper_rfecv_rf": "wrapper_rf",  # correlation filter, then RFECV with random forest
+    "embedded_l1": "embedded",      # non-zero coefficient in L1 logistic regression
+}
+
+
 def selection_stability(X_train: pd.DataFrame, y_train: pd.Series, n_splits: int = 5,
                         mi_top_k: int = 15, l1_C: float = 0.05) -> pd.DataFrame:
-    """Share of training folds in which each feature is selected.
+    """Share of training folds in which each feature is selected, per method.
 
-    filter_mi:   correlation filter, then top-k mutual information
-    embedded_l1: non-zero coefficient in L1 logistic regression
+    Covers the filter, wrapper (RFECV with LR and with RF) and embedded families.
+    ``all_methods`` is the lowest frequency across methods: 1.0 means every
+    method picked the feature in every fold.
     """
     cv = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=RANDOM_STATE)
-    counts = {"filter_mi": pd.Series(0.0, index=X_train.columns),
-              "embedded_l1": pd.Series(0.0, index=X_train.columns)}
+    counts = {col: pd.Series(0.0, index=X_train.columns) for col in STABILITY_METHODS}
 
     for fit_idx, _ in cv.split(X_train, y_train):
         X_fold, y_fold = X_train.iloc[fit_idx], y_train.iloc[fit_idx]
-
-        kept = correlation_filter(X_fold, 0.9)
-        mi = mutual_information_ranking(X_fold[kept], y_fold, RANDOM_STATE)
-        counts["filter_mi"][mi["feature"].head(mi_top_k)] += 1
-
-        counts["embedded_l1"][l1_selection(X_fold, y_fold, C=l1_C)] += 1
+        for col, method in STABILITY_METHODS.items():
+            selected = select_by_method(X_fold, y_fold, method, mi_top_k=mi_top_k,
+                                        l1_C=l1_C, random_state=RANDOM_STATE)
+            counts[col][selected] += 1
 
     freq = pd.DataFrame(counts) / n_splits
-    freq["both_methods"] = freq.min(axis=1)
-    return freq.sort_values(["both_methods", "embedded_l1"], ascending=False)
+    freq["all_methods"] = freq[list(STABILITY_METHODS)].min(axis=1)
+    freq["mean_frequency"] = freq[list(STABILITY_METHODS)].mean(axis=1)
+    return freq.sort_values(["all_methods", "mean_frequency"], ascending=False, kind="stable")
