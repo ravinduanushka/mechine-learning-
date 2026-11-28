@@ -1,0 +1,15 @@
+feature_set,strategy,rank,feature
+Set 0,rfecv,1,age
+Set 0,rfecv,2,race_6
+Set 0,rfecv,3,smoking_current
+Set A,consensus,1,age
+Set A,consensus,2,race_3
+Set A,consensus,3,race_6
+Set A,consensus,4,smoking_never
+Set A,consensus,5,mean_daily_mims
+Set A,consensus,6,wake_wear_min
+Set A,consensus,7,sleep_wear_min
+Set B,rfecv,1,age
+Set B,rfecv,2,mims_q1
+Set B,rfecv,3,mims_q2
+Set B,rfecv,4,pca_score_3
