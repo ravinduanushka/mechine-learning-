@@ -179,16 +179,23 @@ def plot_importance_panels(odds: pd.DataFrame, gini: pd.DataFrame, perm: pd.Data
 
 
 def plot_selection_stability(freq: pd.DataFrame, top: int = 20):
-    """How often each feature is selected by the filter and L1 methods."""
-    order = freq[["filter_mi", "embedded_l1"]].mean(axis=1).sort_values(ascending=False, kind="stable")
+    """How often each feature is selected by the filter, wrapper and embedded methods."""
+    methods = [("filter_mi", "Filter (corr + mutual information)", "#257de0"),
+               ("wrapper_rfecv_lr", "Wrapper (RFECV, logistic)", "#1baf7a"),
+               ("wrapper_rfecv_rf", "Wrapper (RFECV, random forest)", "#8a5cd6"),
+               ("embedded_l1", "Embedded (L1 logistic)", "#f47230")]
+    methods = [m for m in methods if m[0] in freq.columns]
+    order = freq[[m[0] for m in methods]].mean(axis=1).sort_values(ascending=False, kind="stable")
     f = freq.loc[order.index].head(top).iloc[::-1]
     y = np.arange(len(f))
-    fig, ax = plt.subplots(figsize=(7, 0.3 * len(f) + 1.6))
-    ax.barh(y + 0.2, f.filter_mi, height=0.38, color="#257de0", label="Filter (corr + mutual information)")
-    ax.barh(y - 0.2, f.embedded_l1, height=0.38, color="#f47230", label="Embedded (L1 logistic)")
+    h = 0.8 / len(methods)
+    fig, ax = plt.subplots(figsize=(7.5, 0.42 * len(f) + 1.8))
+    for i, (col, label, color) in enumerate(methods):
+        ax.barh(y + (len(methods) - 1) / 2 * h - i * h, f[col], height=h * 0.92,
+                color=color, label=label)
     ax.set_yticks(y, f.index)
     ax.set(xlim=(0, 1.05), xlabel="Selection frequency across 5 training folds")
-    ax.set_title("Feature-selection stability (Set B)", pad=28)
+    ax.set_title("Feature-selection stability (Set B)", pad=40)
     ax.grid(axis="y", visible=False)
     ax.legend(loc="lower left", bbox_to_anchor=(0, 1.0), ncol=2, fontsize=8)
     fig.tight_layout()
