@@ -1,0 +1,24 @@
+feature_set,rank,feature
+Set 0,0,age
+Set 0,1,smoking_current
+Set 0,2,smoking_never
+Set 0,3,cycle_2013_2014
+Set A,0,age
+Set A,1,mean_daily_mims
+Set A,2,race_7
+Set A,3,smoking_never
+Set A,4,sleep_wear_min
+Set A,5,female
+Set A,6,smoking_current
+Set A,7,wake_wear_min
+Set B,0,age
+Set B,1,min_high_intensity
+Set B,2,mims_q4
+Set B,3,mims_q3
+Set B,4,mean_daily_mims
+Set B,5,sedentary_breaks_per_hour
+Set B,6,sleep_wear_min
+Set B,7,female
+Set B,8,race_1
+Set B,9,mims_q2
+Set B,10,wake_wear_min
